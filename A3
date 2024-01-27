@@ -1,0 +1,223 @@
+spring.application.name=fruit-month-price-service
+server.port=8000
+spring.config.import=optional:configserver:http://localhost:8888
+
+---------------------------------------------------------------------------------------------
+
+package com.group5.microservices.fruitmonthpriceservice;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class FruitMonthPriceServiceApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(FruitMonthPriceServiceApplication.class, args);
+	}
+
+}
+
+---------------------------------------------------------------------------------------------
+
+package com.group5.microservices.fruitmonthpriceservice.controller;
+
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.text.NumberFormat;
+
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.EncryptedDocumentException;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+
+import org.springframework.web.bind.annotation.RestController;
+
+import com.group5.microservices.fruitmonthpriceservice.model.FruitPrice;
+
+@RestController
+public class FruitPriceController {
+	@Autowired
+	private Environment environment;
+
+	@GetMapping("/fruit-month-price/fruit/{fruit}/month/{month}")
+	public FruitPrice retrieveFruitPrice(@PathVariable String fruit, @PathVariable String month) throws EncryptedDocumentException, IOException {
+
+		String path = "../fruit-month-price-service/FMP.xlsx";
+		
+		
+		FruitPrice fP = new FruitPrice();
+		FileInputStream file = new FileInputStream(path);
+		
+		Workbook workbook;
+		
+		workbook = WorkbookFactory.create(file);
+		
+		Sheet sheet = workbook.getSheetAt(0);
+		
+
+	     int[]indexes = new int[2];
+		
+		Row firstRow = sheet.getRow(0); // Searching for month in the first row
+	    for (int i = 1; i < firstRow.getLastCellNum(); i++) {
+	        Cell cell = firstRow.getCell(i);
+			
+			if (cell != null && cell.getStringCellValue().equalsIgnoreCase(month)) {
+				// Iterate over the cells in the first row to find the matching month string
+				
+					if (cell.getStringCellValue().equalsIgnoreCase(month)) {
+						// Found matching cell, store row and column indexes and return result
+						indexes[0] = cell.getColumnIndex();
+						fP.setMonth(cell.getStringCellValue());
+						break;
+					}
+				}
+			}
+	    for (Row row : sheet) {
+	    	
+	        Cell firstCell = row.getCell(0); // searching for fruit in the first column
+	        
+	        if (firstCell != null && firstCell.getStringCellValue().equalsIgnoreCase(fruit)) {
+	            
+	        	fP.setFruit(firstCell.getStringCellValue());
+	        	indexes[1] = row.getRowNum();
+	            }
+	        }
+	    
+		
+		
+		//retrieving the target cell
+		Cell cell = sheet.getRow(indexes[1]).getCell(indexes[0]);
+         
+        double price = cell.getNumericCellValue();
+        NumberFormat nf= NumberFormat.getInstance();
+        nf.setMaximumFractionDigits(2);
+        
+
+        
+        fP.setId(fP.getId()+1);
+        
+        
+        fP.setFmp(Double.parseDouble(nf.format(price)));
+        fP.setTotalPrice(Double.parseDouble(nf.format(price)));
+        String port = environment.getProperty("local.server.port");
+        fP.setEnvironment(port);
+        
+        return fP;
+	}
+	
+	
+	
+	
+    @GetMapping("/fruit-total-price/fruit/{fruit}/month/{month}/quantity/{quantity}")
+    public FruitPrice calculateFruitTotalPrice(@PathVariable String fruit, @PathVariable String month,
+            @PathVariable int quantity) throws IOException {
+
+        FruitPrice fruitPrice = retrieveFruitPrice(fruit, month);
+
+        double totalPrice = fruitPrice.getFmp() * quantity;
+		NumberFormat nf= NumberFormat.getInstance();
+		nf.setMaximumFractionDigits(2);
+        
+        fruitPrice.setQuantity(quantity);
+        
+        fruitPrice.setTotalPrice(totalPrice);
+        String port = environment.getProperty("local.server.port");
+        fruitPrice.setEnvironment(port);
+        return fruitPrice;
+    }
+}
+
+---------------------------------------------------------------------------------------------
+
+package com.group5.microservices.fruitmonthpriceservice.model;
+
+
+public class FruitPrice {
+	
+	private int id = 10000;
+	
+	private String fruit;
+	
+	private String month;
+
+	private double fmp;
+	
+	private double quantity = 1;
+	
+	private double totalPrice = fmp;
+	
+	
+	private String environment;
+	
+	public double getQuantity() {
+		return quantity;
+	}
+
+	public void setQuantity(double quantity) {
+		this.quantity = quantity;
+	}
+
+	public double getTotalPrice() {
+		return totalPrice;
+	}
+
+	public void setTotalPrice(double totalPrice) {
+		this.totalPrice = totalPrice;
+	}
+
+	
+	
+	public String getEnvironment() {
+		return environment;
+	}
+
+	public void setEnvironment(String environment) {
+		this.environment = environment;
+	}
+
+	public int getId() {
+		return id;
+	}
+
+	public void setId(int id) {
+		this.id = id;
+	}
+
+	public FruitPrice() {
+		super();
+		
+	
+	}
+	
+	public String getFruit() {
+		return fruit;
+	}
+
+	public void setFruit(String fruit) {
+		this.fruit = fruit;
+	}
+
+	public double getFmp() {
+		return fmp;
+	}
+
+	public void setFmp(double fmp) {
+		this.fmp = fmp;
+	}
+
+	public String getMonth() {
+		return month;
+	}
+
+	public void setMonth(String month) {
+		this.month = month;
+	}
+
+}
